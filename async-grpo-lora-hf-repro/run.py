@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 exp_dir = Path(__file__).resolve().parent
-common_dir = exp_dir.parent / "common"
+repo_root = exp_dir.parent
 if str(exp_dir) not in sys.path:
     sys.path.insert(0, str(exp_dir))
 
@@ -71,10 +71,8 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     remote_root = getattr(cfg.infra, "remote_root", "/content/torchy2").rstrip("/")
     remote_exp_dir = f"{remote_root}/{exp_dir.name}"
-    remote_common_dir = f"{remote_root}/common"
     sync_dirs = {
-        str(exp_dir): remote_exp_dir,
-        str(common_dir): remote_common_dir,
+        str(repo_root): remote_root,
     }
 
     inf_session_kwargs = cfg.infra.inference.to_dict()
