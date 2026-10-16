@@ -4,7 +4,7 @@ Self-contained RL experiments and shared infrastructure for Google Colab and Hug
 
 ## Structure
 
-Each experiment directory is an isolated project with its own `pyproject.toml`, `configs/`, `exp/`, and `env/`. Shared infrastructure lives in `common/` (`torchy-core`) and links into each experiment via `[tool.uv.sources]`.
+Each experiment directory is an isolated project with its own `pyproject.toml`, `run.py`, `train.py`, `configs/`, `env/`, and `exp/<run_name>/` run logbooks. Shared infrastructure lives in `common/` (`torchy-core`) and links into each experiment via `[tool.uv.sources]`.
 
 | Directory | Purpose |
 | :--- | :--- |
@@ -15,5 +15,5 @@ Each experiment directory is an isolated project with its own `pyproject.toml`, 
 
 ```bash
 cd async-grpo-lora-hf-repro
-uv run python exp/run.py --config configs/repro.py --dry-run
+uv run python run.py --config configs/repro.py --dry-run
 ```

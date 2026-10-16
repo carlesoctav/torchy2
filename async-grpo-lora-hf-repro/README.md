@@ -11,14 +11,16 @@ Reproduces the Hugging Face reference recipe for multi-server Asynchronous GRPO 
 ```text
 async-grpo-lora-hf-repro/
 ├── pyproject.toml        # Experiment dependencies + editable ../common (torchy-core)
+├── run.py                # 2-VM Colab orchestrator (vLLM + Trainer)
+├── train.py              # AsyncGRPOTrainer entrypoint
 ├── configs/
 │   └── repro.py          # Unified 2-VM + AsyncGRPO configuration
-├── exp/
-│   ├── run.py            # 2-VM Colab orchestrator (vLLM + Trainer)
-│   └── train.py          # AsyncGRPOTrainer entrypoint
-└── env/
-    ├── __init__.py       # make_env dispatcher
-    └── sanity_math.py    # sail/Sanity-Test-R1D-1.5B + QwenMathReward
+├── env/
+│   ├── __init__.py       # make_env dispatcher
+│   └── sanity_math.py    # sail/Sanity-Test-R1D-1.5B + QwenMathReward
+└── exp/
+    └── qwen2.5-math-1.5b-r1-b128/
+        └── README.md     # Run logbook & 500-step results
 ```
 
 ## Running on Google Colab
@@ -27,10 +29,10 @@ async-grpo-lora-hf-repro/
 cd async-grpo-lora-hf-repro
 
 # Dry run to inspect resolved commands and sync mapping
-uv run python exp/run.py --config configs/repro.py --dry-run
+uv run python run.py --config configs/repro.py --dry-run
 
 # Launch both Colab VMs (vLLM + Trainer) and run training
-uv run python exp/run.py --config configs/repro.py
+uv run python run.py --config configs/repro.py
 ```
 
 ## Hyperparameters

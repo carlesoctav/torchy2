@@ -32,7 +32,7 @@ torchy-core = { path = "../common", editable = true }
 trl = { git = "https://github.com/carlesoctav/trl" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["env", "exp"]
+packages = ["env"]
 
 [build-system]
 requires = ["hatchling"]

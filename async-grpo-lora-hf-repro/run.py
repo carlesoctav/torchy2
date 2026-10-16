@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-exp_dir = Path(__file__).resolve().parent.parent
+exp_dir = Path(__file__).resolve().parent
 common_dir = exp_dir.parent / "common"
 if str(exp_dir) not in sys.path:
     sys.path.insert(0, str(exp_dir))
@@ -48,7 +48,7 @@ def build_vllm_command(cfg: sws.FinalConfig) -> list[str]:
 
 def build_trainer_command(config_rel_path: str) -> list[str]:
     return [
-        "uv", "run", "python", "exp/train.py",
+        "uv", "run", "python", "train.py",
         "--config", config_rel_path,
     ]
 
