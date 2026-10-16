@@ -76,7 +76,9 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
     }
 
     inf_session_kwargs = cfg.infra.inference.to_dict()
+    inf_session_env = inf_session_kwargs.pop("env_vars", {})
     train_session_kwargs = cfg.infra.train.to_dict()
+    trainer_session_env = train_session_kwargs.pop("env_vars", {})
     for kwargs in (inf_session_kwargs, train_session_kwargs):
         if extra_args.reuse:
             kwargs["reuse"] = True
@@ -106,7 +108,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
     trainer_session = ColabSession(**train_session_kwargs)
 
     with ProcessGroup() as pg:
-        vllm_env = cfg.inference.to_dict().get("env_vars", {})
+        vllm_env = {**inf_session_env, **cfg.inference.to_dict().get("env_vars", {})}
         vllm_proc = vllm_session.Popen(
             cmd=vllm_cmd,
             log_path=log_dir / "vllm.log",
@@ -124,6 +126,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
             log_path=log_dir / "trainer.log",
             dir=sync_dirs,
             work_dir=remote_exp_dir,
+            env=trainer_session_env,
         )
         pg.add("trainer", trainer_proc, session=trainer_session)
 
