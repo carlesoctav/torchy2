@@ -322,8 +322,14 @@ class ColabSession:
                     remote_work_dir = dst_path
                 logger.info(f"[{self.session}] Syncing {src_path} -> {dst_path}")
 
-                gitignore = src_path / ".gitignore"
-                filter_args = ["--filter=:- .gitignore"] if gitignore.exists() else []
+                filter_args = [
+                    "--exclude=.git",
+                    "--exclude=.venv",
+                    "--filter=:- .gitignore",
+                ]
+                root_gitignore = src_path.parent / ".gitignore"
+                if not (src_path / ".gitignore").exists() and root_gitignore.exists():
+                    filter_args.append(f"--exclude-from={root_gitignore}")
 
                 subprocess.run(
                     [

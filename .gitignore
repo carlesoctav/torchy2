@@ -1,13 +1,42 @@
+# Git & Virtual environments (excluded from mycolab sync / rsync)
+.git
+.venv
+venv
+ENV/
+
+# Python-generated & build files
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
-venv/
+*.so
 build/
 dist/
+wheels/
 *.egg-info/
-logs/
-outputs/
-temp/
+
+# Caches & tooling
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+unsloth_compiled_cache/
+.mycolab/
+.workmux/
+.workmux.yaml
 .audit/
 decisions.tsv
+
+# Logs, local outputs, & heavy model artifacts
+logs/
+outputs/
+data/
+raw/
+temp/
+wandb/
+trackio/
+checkpoint-*/
+final-adapter/
+*.safetensors
+*.pt
+*.bin
+*.gguf
