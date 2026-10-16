@@ -46,6 +46,12 @@ def build_vllm_command(cfg: sws.FinalConfig) -> list[str]:
     return cmd
 
 
+def build_env_server_command(cfg: sws.FinalConfig) -> list[str]:
+    return [
+        "uv", "run", "python", "-m", "env.server",
+    ]
+
+
 def build_trainer_command(config_rel_path: str) -> list[str]:
     return [
         "uv", "run", "python", "train.py",
@@ -92,16 +98,19 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
     logger.info(f"Sync mapping: {sync_dirs}")
 
     vllm_cmd = build_vllm_command(cfg)
+    env_server_cmd = build_env_server_command(cfg)
     trainer_cmd = build_trainer_command(config_rel_path)
 
     if extra_args.dry_run:
         logger.info("[Dry Run] vLLM command: " + " ".join(vllm_cmd))
+        logger.info("[Dry Run] Env Server command: " + " ".join(env_server_cmd))
         logger.info("[Dry Run] Trainer command: " + " ".join(trainer_cmd))
         return
 
     log_dir = exp_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "vllm.log").unlink(missing_ok=True)
+    (log_dir / "env_server.log").unlink(missing_ok=True)
     (log_dir / "trainer.log").unlink(missing_ok=True)
 
     vllm_session = ColabSession(**inf_session_kwargs)
@@ -118,8 +127,28 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
         )
         pg.add("vllm", vllm_proc, session=vllm_session)
 
+        env_server_cfg = getattr(cfg, "env_server", None)
+        env_server_dict = env_server_cfg.to_dict() if hasattr(env_server_cfg, "to_dict") else {}
+        env_port = int(env_server_dict.get("port", 8001))
+        env_server_env = {
+            **trainer_session_env,
+            "ENABLE_WEB_INTERFACE": "true" if env_server_dict.get("enable_web_interface", True) else "false",
+            "WORDLE_PORT": str(env_port),
+            "WORDLE_HOST": str(env_server_dict.get("host", "0.0.0.0")),
+            "WORDLE_MAX_SESSIONS": str(env_server_dict.get("max_sessions", 256)),
+        }
+        env_server_proc = trainer_session.Popen(
+            cmd=env_server_cmd,
+            log_path=log_dir / "env_server.log",
+            dir=sync_dirs,
+            work_dir=remote_exp_dir,
+            env=env_server_env,
+        )
+        pg.add("env_server", env_server_proc, session=trainer_session)
+
         vllm_port = int(cfg.inference.port)
         wait_for_http_ready(url=f"http://127.0.0.1:{vllm_port}/health", timeout=300)
+        wait_for_http_ready(url=f"http://127.0.0.1:{env_port}/health", timeout=180)
 
         trainer_proc = trainer_session.Popen(
             cmd=trainer_cmd,

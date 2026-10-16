@@ -17,6 +17,7 @@ dependencies = [
     "vllm",
     "peft>=0.21.2",
     "openenv>=0.4.1",
+    "openenv-textarena",
 ]
 
 [tool.uv]
@@ -40,5 +41,5 @@ build-backend = "uv_build"
 
 [tool.uv.sources]
 torchy-core = { path = "../common", editable = true }
-# trl = { git = "https://github.com/carlesoctav/trl" }
+openenv-textarena = { git = "https://huggingface.co/spaces/openenv/wordle" }
 
