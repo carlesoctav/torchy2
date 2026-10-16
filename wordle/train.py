@@ -14,16 +14,17 @@ import sws
 
 from env import make_env
 from torchy_core.patch import wait_lora_patch
-from torchy_core.sws_utils import load_config_builder
 
 logger = logging.getLogger(__name__)
 
 
-def get_config() -> sws.Config:
-    return load_config_builder(str(exp_dir / "configs/repro.py"))
-
-
 def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
+    model_dict = config.train.model.to_dict()
+    grpo_dict = config.train.grpo.to_dict()
+    output_dir = config.train.output_dir
+    env_name = config.env.name
+    env_client_dict = config.env.client.to_dict()
+
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     trl_logger = logging.getLogger("trl")
@@ -54,17 +55,13 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     async_grpo_trainer.create_model_from_path = _create_model_untied
 
-    env_dict = make_env(config.env_name, config.env.to_dict() if hasattr(config.env, "to_dict") else dict(config.env))
-    model_dict = config.model.to_dict() if hasattr(config.model, "to_dict") else dict(config.model)
-    if getattr(config.model, "peft_config", None) is not None:
-        peft_cfg = config.model.peft_config
-        peft_dict = peft_cfg.to_dict() if hasattr(peft_cfg, "to_dict") else dict(peft_cfg)
-        model_dict["peft_config"] = LoraConfig(**peft_dict)
+    env_client_dict = make_env(env_name, env_client_dict)
+    if "peft_config" in model_dict:
+        model_dict["peft_config"] = LoraConfig(**model_dict["peft_config"])
 
-    grpo_dict = config.grpo.to_dict() if hasattr(config.grpo, "to_dict") else dict(config.grpo)
     args = AsyncGRPOConfig(**grpo_dict)
 
-    config_json = Path(f"{config.output_dir}/config.json")
+    config_json = Path(f"{output_dir}/config.json")
     config_json.parent.mkdir(parents=True, exist_ok=True)
     with config_json.open("w") as f:
         f.write(config.to_json())
@@ -72,16 +69,16 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     trainer = AsyncGRPOTrainer(
         **model_dict,
         args=args,
-        **env_dict,
+        **env_client_dict,
     )
 
-    last_checkpoint = get_last_checkpoint(config.output_dir) if os.path.isdir(config.output_dir) else None
+    last_checkpoint = get_last_checkpoint(output_dir) if os.path.isdir(output_dir) else None
     if last_checkpoint:
         logger.info(f"[resume] Resuming from checkpoint: {last_checkpoint}")
     trainer.train(resume_from_checkpoint=last_checkpoint)
     logger.info(f"[done] Finished training. global_step={trainer.state.global_step}")
 
-    final_dir = os.path.join(config.output_dir, "final-adapter")
+    final_dir = os.path.join(output_dir, "final-adapter")
     try:
         async_grpo_trainer.save_lora_adapter(
             trainer.accelerator.unwrap_model(trainer.model),
@@ -94,10 +91,5 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
         logger.warning(f"Could not save final adapter to {final_dir}: {e}")
 
 
-def main_cli():
-    sws.run(main, forward_extras=True)
-
-
 if __name__ == "__main__":
-    main_cli()
-
+    sws.run(main, forward_extras=True)

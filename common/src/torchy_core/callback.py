@@ -22,7 +22,7 @@ def project_dir_for(output_dir: str) -> str:
 
 class BucketSyncCallback(TrainerCallback):
     def __init__(self, config: Any):
-        self.bucket_id = config.get("bucket_id") if hasattr(config, "get") else getattr(config, "bucket_id", None)
+        self.bucket_id = config["bucket_id"] if isinstance(config, dict) else config.bucket_id
         self.enabled = bool(self.bucket_id)
         self._local_dir: str | None = None
         self._shut_down = False

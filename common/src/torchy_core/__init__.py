@@ -10,13 +10,19 @@ from torchy_core.sws_utils import (
     run,
 )
 
+from torchy_core.env_server import build_env_server_command
+from torchy_core.vllm import build_vllm_command
+
 __all__ = [
     "ColabProcess",
     "ColabSession",
     "ConfigLoadError",
     "ProcessGroup",
     "VMStopper",
+    "build_env_server_command",
+    "build_vllm_command",
     "combine_and_write",
+    "extract_config_and_argv",
     "load_config_builder",
     "merge_config_builders",
     "run",

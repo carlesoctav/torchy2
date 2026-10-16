@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import os
 import random
 from uuid import uuid4
 
 os.environ.setdefault("NLTK_ALLOW_PROXIED_URLOPEN", "1")
-os.environ.setdefault("ENABLE_WEB_INTERFACE", "true")
 
 import nltk
 
@@ -84,21 +84,29 @@ def create_textarena_environment():
     )
 
 
-app = create_app(
-    create_textarena_environment,
-    TextArenaAction,
-    TextArenaObservation,
-    env_name="textarena_env",
-    max_concurrent_envs=int(os.getenv("WORDLE_MAX_SESSIONS", "256")),
-    gradio_builder=build_textarena_gradio_app,
-)
-
-
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Wordle Environment Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind server")
+    parser.add_argument("--port", type=int, default=8001, help="Port to listen on")
+    parser.add_argument("--max-sessions", type=int, default=256, help="Maximum concurrent environment sessions")
+    parser.add_argument("--enable-web-interface", action=argparse.BooleanOptionalAction, default=True, help="Enable Gradio web UI")
+    args, _ = parser.parse_known_args()
+
+    gradio_builder = build_textarena_gradio_app if args.enable_web_interface else None
+
+    app = create_app(
+        create_textarena_environment,
+        TextArenaAction,
+        TextArenaObservation,
+        env_name="textarena_env",
+        max_concurrent_envs=args.max_sessions,
+        gradio_builder=gradio_builder,
+    )
+
     uvicorn.run(
         app,
-        host=os.getenv("WORDLE_HOST", "0.0.0.0"),
-        port=int(os.getenv("WORDLE_PORT", "8001")),
+        host=args.host,
+        port=args.port,
     )
 
 

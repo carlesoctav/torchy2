@@ -78,7 +78,6 @@ class WordleEnv:
         return feedback
 
     def get_reward(self) -> float:
-        """Return the episode reward for TRL environment reward tracking."""
         return float(self.reward)
 
 
