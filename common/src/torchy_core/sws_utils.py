@@ -223,6 +223,33 @@ def _looks_like_config_path(token: str) -> bool:
     return path.endswith(".py") or path.startswith("gs://")
 
 
+def extract_config_and_argv(
+    argv: Sequence[str] | None = None,
+    *,
+    config_flag: str = "--config",
+) -> tuple[str | None, list[str]]:
+    args = list(sys.argv[1:] if argv is None else argv)
+    cfg_path = None
+    consumed = set()
+    for i, tok in enumerate(args):
+        if tok == config_flag:
+            if i + 1 >= len(args):
+                raise ValueError(
+                    f"Missing value for {config_flag}: "
+                    f"expected {config_flag} path.py[:func]."
+                )
+            cfg_path = args[i + 1]
+            consumed.update({i, i + 1})
+            break
+        if tok.startswith(config_flag + "="):
+            cfg_path = tok.split("=", 1)[1]
+            consumed.add(i)
+            break
+
+    other_argv = [tok for i, tok in enumerate(args) if i not in consumed]
+    return cfg_path, other_argv
+
+
 def _split_config_args(
     argv: Sequence[str], *, config_flag: str
 ) -> tuple[list[str], list[str]]:

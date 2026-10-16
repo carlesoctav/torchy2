@@ -13,7 +13,7 @@ if str(exp_dir) not in sys.path:
 
 import sws
 from torchy_core.infra import ColabSession, ProcessGroup, wait_for_http_ready
-from torchy_core.sws_utils import _split_config_args, load_config_builder, run as sws_run
+from torchy_core.sws_utils import extract_config_and_argv, load_config_builder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,10 +52,11 @@ def build_env_server_command(cfg: sws.FinalConfig) -> list[str]:
     ]
 
 
-def build_trainer_command(config_rel_path: str) -> list[str]:
+def build_trainer_command(config_rel_path: str, *other_argv: str) -> list[str]:
     return [
         "uv", "run", "python", "train.py",
         "--config", config_rel_path,
+        *other_argv,
     ]
 
 
@@ -67,13 +68,20 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
     parser.add_argument("--dry-run", action="store_true", help="Print commands without starting VMs")
     extra_args, _ = parser.parse_known_args(unused_argv or [])
 
-    config_paths, _ = _split_config_args(sys.argv[1:], config_flag="--config")
-    raw_config_path = config_paths[0] if config_paths else "configs/repro.py"
-    config_full_path = (exp_dir / raw_config_path).resolve() if not Path(raw_config_path).is_absolute() else Path(raw_config_path)
+    cfg_path, other_argv = extract_config_and_argv(sys.argv[1:])
+    raw_config_path = cfg_path or "configs/repro.py"
+    func_suffix = ""
+    head, sep, tail = raw_config_path.rpartition(":")
+    if sep and tail.isidentifier():
+        file_part, func_suffix = head, f":{tail}"
+    else:
+        file_part = raw_config_path
+
+    config_full_path = (exp_dir / file_part).resolve() if not Path(file_part).is_absolute() else Path(file_part)
     try:
-        config_rel_path = str(config_full_path.relative_to(exp_dir))
+        config_rel_path = str(config_full_path.relative_to(exp_dir)) + func_suffix
     except ValueError:
-        config_rel_path = str(raw_config_path)
+        config_rel_path = raw_config_path
 
     remote_root = getattr(cfg.infra, "remote_root", "/content/torchy2").rstrip("/")
     remote_exp_dir = f"{remote_root}/{exp_dir.name}"
@@ -99,7 +107,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     vllm_cmd = build_vllm_command(cfg)
     env_server_cmd = build_env_server_command(cfg)
-    trainer_cmd = build_trainer_command(config_rel_path)
+    trainer_cmd = build_trainer_command(config_rel_path, *other_argv)
 
     if extra_args.dry_run:
         logger.info("[Dry Run] vLLM command: " + " ".join(vllm_cmd))
@@ -164,7 +172,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
 
 
 def main_cli():
-    sws_run(main, forward_extras=True)
+    sws.run(main, forward_extras=True)
 
 
 if __name__ == "__main__":

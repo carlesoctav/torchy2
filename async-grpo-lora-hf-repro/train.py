@@ -14,12 +14,16 @@ import sws
 
 from env import make_env
 from torchy_core.patch import wait_lora_patch
-from torchy_core.sws_utils import run as sws_run
+from torchy_core.sws_utils import load_config_builder
 
 logger = logging.getLogger(__name__)
 
 
-def main(config: sws.FinalConfig):
+def get_config() -> sws.Config:
+    return load_config_builder(str(exp_dir / "configs/repro.py"))
+
+
+def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     trl_logger = logging.getLogger("trl")
@@ -91,7 +95,7 @@ def main(config: sws.FinalConfig):
 
 
 def main_cli():
-    sws_run(main)
+    sws.run(main, forward_extras=True)
 
 
 if __name__ == "__main__":
