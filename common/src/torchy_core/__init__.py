@@ -11,9 +11,11 @@ from torchy_core.sws_utils import (
 )
 
 from torchy_core.env_server import build_env_server_command
+from torchy_core.eval import AsyncEval
 from torchy_core.vllm import build_vllm_command
 
 __all__ = [
+    "AsyncEval",
     "ColabProcess",
     "ColabSession",
     "ConfigLoadError",
