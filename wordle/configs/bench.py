@@ -16,7 +16,7 @@ def get_config() -> sws.Config:
     config.inference.infra.local_forwards = ["8000:localhost:8000", "8001:localhost:8001"]
     config.inference.infra.stop_vm = False
 
-    config.inference.vllm.model = "Qwen/Qwen3-1.7B"
+    config.inference.vllm.model = "lewtun/wordle-grpo-Qwen3-1.7B"
     config.inference.vllm.host = "0.0.0.0"
     config.inference.vllm.port = 8000
     config.inference.vllm.max_model_len = 8192
@@ -45,7 +45,7 @@ def get_config() -> sws.Config:
     config.eval.max_inflight_tasks = 12 
     config.eval.log_completions = False
     config.eval.num_completions_to_print = 0
-    config.eval.chat_template_kwargs = {"enable_thinking": True}
+    config.eval.chat_template_kwargs = {"enable_thinking": False}
     config.eval.temperature= 0.6
     config.eval.top_p= 0.95
     config.eval.top_k= 20
