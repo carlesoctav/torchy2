@@ -13,6 +13,7 @@ if str(exp_dir) not in sys.path:
 import sws
 
 from env import make_env
+from torchy_core import make_rollout_worker
 from torchy_core.patch import wait_lora_patch
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     output_dir = config.train.output_dir
     env_name = config.env.name
     env_client_dict = config.env.client.to_dict()
+    rollout_worker_name = config.rollout_worker_name
+    rollout_worker_dict = config.rollout_worker.to_dict()
 
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
@@ -61,6 +64,12 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     args = AsyncGRPOConfig(**grpo_dict)
 
+    rollout_worker = None
+    if rollout_worker_name is not None:
+        rollout_worker = make_rollout_worker(
+            rollout_worker_name, rollout_worker_dict, model_dict, env_client_dict, args=args
+        )
+
     config_json = Path(f"{output_dir}/config.json")
     config_json.parent.mkdir(parents=True, exist_ok=True)
     with config_json.open("w") as f:
@@ -69,6 +78,7 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     trainer = AsyncGRPOTrainer(
         **model_dict,
         args=args,
+        rollout_worker=rollout_worker,
         **env_client_dict,
     )
 

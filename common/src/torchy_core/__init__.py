@@ -12,6 +12,7 @@ from torchy_core.sws_utils import (
 
 from torchy_core.env_server import build_env_server_command
 from torchy_core.eval import AsyncEval
+from torchy_core.rollout import make_rollout_worker
 from torchy_core.vllm import build_vllm_command
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "combine_and_write",
     "extract_config_and_argv",
     "load_config_builder",
+    "make_rollout_worker",
     "merge_config_builders",
     "run",
     "wait_for_http_ready",

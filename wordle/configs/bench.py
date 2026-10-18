@@ -10,13 +10,16 @@ def get_config() -> sws.Config:
     config.project_name = "wordle-qwen3"
     config.output_dir = "outputs"
     config.remote_root = "/content/torchy2"
+    # config.rollout_worker_name = "thinking_budget_rollout"
+    config.rollout_worker.thinking_budget = 768
+    config.rollout_worker.mask_force_think = True
 
     config.inference.infra.session = "vllm"
     config.inference.infra.gpu = "l4"
     config.inference.infra.local_forwards = ["8000:localhost:8000", "8001:localhost:8001"]
     config.inference.infra.stop_vm = False
 
-    config.inference.vllm.model = "lewtun/wordle-grpo-Qwen3-1.7B"
+    config.inference.vllm.model = "Qwen/Qwen3-1.7B"
     config.inference.vllm.host = "0.0.0.0"
     config.inference.vllm.port = 8000
     config.inference.vllm.max_model_len = 8192
@@ -40,8 +43,7 @@ def get_config() -> sws.Config:
     config.eval.project_name = lambda: config.project_name
     config.eval.exp_name = lambda: config.exp_name
     config.eval.max_completion_length = 1024
-    config.eval.thinking_token_budget = 800
-    config.eval.max_tool_calling_iterations = 6
+    config.eval.max_tool_calling_iterations = 8
     config.eval.max_inflight_tasks = 12 
     config.eval.log_completions = False
     config.eval.num_completions_to_print = 0

@@ -17,48 +17,22 @@ from trl.experimental.async_grpo.async_rollout_worker import (
     RolloutGroup,
     RolloutSample,
     TrainingSequence,
-    _AsyncRolloutLoop,
 )
+
+from torchy_core.rollout.thinking_budget_rollout import ThinkingBudgetRolloutLoop
 
 logger = logging.getLogger(__name__)
 
 
-class _EvalRolloutLoop(_AsyncRolloutLoop):
+class _EvalRolloutLoop(ThinkingBudgetRolloutLoop):
     """Finite single-pass `_AsyncRolloutLoop` for evaluation."""
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs["score_queue_maxsize"] = 0
-        self.thinking_token_budget: int | None = kwargs.pop("thinking_token_budget", None)
         super().__init__(**kwargs)
         self._gen_stop_event = asyncio.Event()
         if len(self.dataset) == 0 or self.num_generations == 0:
             self._gen_stop_event.set()
-
-    async def _generate_one_turn(self, prompt_ids: list[int]) -> tuple[list[int], list[float]]:
-        if self.thinking_token_budget is None:
-            return await super()._generate_one_turn(prompt_ids)
-        payload: dict[str, Any] = {
-            "model": self._request_model,
-            "prompt": prompt_ids,
-            "max_tokens": self.max_tokens,
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "top_k": self.top_k,
-            "repetition_penalty": self.repetition_penalty,
-            "n": 1,
-            "return_token_ids": True,
-            "logprobs": 0,
-            "thinking_token_budget": self.thinking_token_budget,
-        }
-        if self.min_p is not None:
-            payload["min_p"] = self.min_p
-        output = await self._retry(
-            lambda: self._post("/v1/completions", payload, self.request_timeout),
-            max_attempts=30,
-            label="vllm /v1/completions",
-        )
-        choice = output["choices"][0]
-        return choice["token_ids"], choice["logprobs"]["token_logprobs"]
 
     def _repeat_iterator(self) -> Iterator[tuple[int, dict[str, Any]]]:
         total = len(self.dataset) * self.num_generations
@@ -125,7 +99,6 @@ class AsyncEval:
         log_completions: bool = False,
         num_completions_to_print: int | None = None,
         processing_class: PreTrainedTokenizerBase | None = None,
-        thinking_token_budget: int | None = None,
         **kwargs: Any,
     ) -> None:
         self.output_dir = Path(output_dir) / project_name / exp_name
@@ -172,7 +145,6 @@ class AsyncEval:
             max_tool_calling_iterations=max_tool_calling_iterations,
             log_completions=log_completions,
             num_completions_to_print=num_completions_to_print,
-            thinking_token_budget=thinking_token_budget,
             **kwargs,
         )
 

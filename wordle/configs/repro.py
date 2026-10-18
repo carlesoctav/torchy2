@@ -12,6 +12,9 @@ def get_config() -> sws.Config:
     config.output_dir = lambda: f"/content/lora/{config.project_name}/{config.exp_name}"
     config.seed = 3407
     config.remote_root = "/content/torchy2"
+    config.rollout_worker_name = "thinking_budget_rollout"
+    config.rollout_worker.thinking_budget = 800
+    config.rollout_worker.mask_force_think = True
 
     config.inference.infra.session = "vllm"
     config.inference.infra.gpu = "l4"
@@ -28,6 +31,7 @@ def get_config() -> sws.Config:
     config.inference.vllm.max_loras = 6
     config.inference.vllm.logprobs_mode = "processed_logprobs"
     config.inference.vllm.generation_config = "vllm"
+    config.inference.vllm.reasoning_parser = "qwen3"
     config.inference.vllm.enable_lora = True
     config.inference.vllm.env_vars = {
         "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "1",

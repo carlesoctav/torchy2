@@ -43,6 +43,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
     env_server_config = cfg.env.server.to_dict()
     env_client_dict = cfg.env.client.to_dict()
     eval_config = cfg.eval.to_dict()
+    rollout_worker_config = cfg.rollout_worker.to_dict()
 
     remote_root = cfg.remote_root.rstrip("/")
     remote_exp_dir = f"{remote_root}/{exp_dir.name}"
@@ -114,6 +115,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
             model_name=model_name,
             env_client=env_client,
             **eval_config,
+            **rollout_worker_config,
         )
         evaluator.run()
         logger.info(f"Finished benchmark: saved={evaluator.parquet_path}")
