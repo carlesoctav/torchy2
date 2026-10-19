@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 from typing import Any
 
 from transformers import AutoTokenizer
@@ -21,6 +22,10 @@ class ThinkingBudgetRolloutLoop(_AsyncRolloutLoop):
         self.thinking_budget = thinking_budget
         self.mask_force_think = mask_force_think
         super().__init__(**kwargs)
+
+    def run(self) -> None:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        super().run()
 
     async def _generate_one_turn(self, prompt_ids: list[int]) -> tuple[list[int], list[float]]:
         if self.thinking_budget is None:
