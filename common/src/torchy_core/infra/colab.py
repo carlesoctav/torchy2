@@ -97,6 +97,7 @@ class ColabProcess:
                         ssh_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        start_new_session=True,
                     )
                 except Exception as e:
                     logger.warning(f"[{self.proc_id}] SSH stream launch failed: {e}")
@@ -298,7 +299,7 @@ class ColabSession:
         args.append(self.session)
 
         logger.info(f"[{self.session}] Starting SSH master connection: {' '.join(args)}")
-        subprocess.run(args, check=True)
+        subprocess.run(args, check=True, start_new_session=True)
 
     def Popen(
         self,
