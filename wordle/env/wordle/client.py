@@ -5,7 +5,7 @@ import random
 from typing import Any
 
 from datasets import Dataset
-from textarena_env import TextArenaAction, TextArenaEnv
+from textarena_env import TextArenaAction, TextArenaEnv as OpenEnvTextArenaEnvClient
 
 DEFAULT_ENV_URL = "http://127.0.0.1:8001"
 
@@ -24,29 +24,25 @@ Follow these rules to play Wordle:
 """
 
 
-class WordleEnv:
+class TRLWordleEnv:
     def __init__(self, env_url: str = DEFAULT_ENV_URL):
         self.env_url = env_url
-        self._client = None
+        self._client = OpenEnvTextArenaEnvClient(base_url=self.env_url).sync()
         self._last_full_feedback = ""
-        self.reward = 0.0
+        self.obv_reward = None
+        self.reward_signals = None
         self.done = False
-
-    def _ensure_client(self):
-        if self._client is None:
-            self._client = TextArenaEnv(base_url=self.env_url).sync()
-        return self._client
 
     def reset(self, **kwargs: Any) -> str | None:
         seed = kwargs.get("seed")
-        client = self._ensure_client()
-        result = client.reset(seed=int(seed)) if seed is not None else client.reset()
+        result = self._client.reset(seed=int(seed)) if seed is not None else self._client.reset()
         self._last_full_feedback = (
             result.observation.messages[0].content
             if result.observation.messages
             else result.observation.prompt
         )
-        self.reward = 0.0
+        self.obv_reward = None
+        self.reward_signals = None
         self.done = False
         return self._last_full_feedback
 
@@ -60,9 +56,13 @@ class WordleEnv:
             The feedback message from the environment.
         """
         if self.done:
-            raise ValueError("Game over.")
-        client = self._ensure_client()
-        result = client.step(TextArenaAction(message=guess))
+            if self.obv_reward is None:
+                return "game is over. too much making mistake"
+            else:
+                final_feedback = "you win" if self.obv_reward == 1.0 else "you lose"
+                return f"game is over. {final_feedback}"
+
+        result = self._client.step(TextArenaAction(message=guess))
         full_feedback = (
             result.observation.messages[0].content
             if result.observation.messages
@@ -70,15 +70,23 @@ class WordleEnv:
         )
         feedback = full_feedback[len(self._last_full_feedback) :]
         self._last_full_feedback = full_feedback
-        if "You attempted an invalid move" in feedback:
-            self.reward = 0.0
+        if "Feedback:" not in feedback and result.reward != 1.0:
+            self.obv_reward = None
+            self.reward_signals = None
         else:
-            self.reward = float(result.reward or 0.0)
+            self.obv_reward = float(result.reward)
+            self.reward_signals = result.observation.info["reward_signals"]
         self.done = bool(result.done)
         return feedback
 
     def get_reward(self) -> float:
-        return float(self.reward)
+        if self.obv_reward is None:
+            return 0.0
+
+        if self.obv_reward != 1.0:
+            return self.reward_signals["wordle.greens"] * 5 * 0.05 + self.reward_signals["wordle.yellows"] * 5 * 0.025
+        else:
+            return 1.0
 
 
 def make(
@@ -98,5 +106,5 @@ def make(
     )
     return {
         "train_dataset": train_dataset,
-        "environment_factory": functools.partial(WordleEnv, env_url=env_url),
+        "environment_factory": functools.partial(TRLWordleEnv, env_url=env_url),
     }
