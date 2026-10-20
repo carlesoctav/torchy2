@@ -11,7 +11,7 @@ from typing import Any
 import aiohttp
 from accelerate.state import PartialState
 from datasets import Dataset
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from transformers import AutoTokenizer, GenerationConfig, PreTrainedTokenizerBase
 from trl.experimental.async_grpo.async_rollout_worker import (
     AsyncRolloutWorker,
     RolloutGroup,
@@ -118,6 +118,14 @@ class AsyncEval:
         if processing_class.pad_token is None:
             processing_class.pad_token = processing_class.eos_token
 
+        eos_token_ids = GenerationConfig.from_pretrained(model_name).eos_token_id
+        if eos_token_ids is None:
+            eos_token_ids = []
+        elif isinstance(eos_token_ids, int):
+            eos_token_ids = [eos_token_ids]
+        if processing_class.eos_token_id not in eos_token_ids:
+            eos_token_ids = [processing_class.eos_token_id, *eos_token_ids]
+
         self.total_rollouts = len(dataset) * num_generations
         self._stale_after_s = max(300.0, float(request_timeout) * 3.0)
 
@@ -128,6 +136,7 @@ class AsyncEval:
             dataset=dataset,
             reward_funcs=reward_funcs,
             processing_class=processing_class,
+            eos_token_ids=eos_token_ids,
             tools=tools,
             environment_factory=environment_factory,
             num_generations=num_generations,

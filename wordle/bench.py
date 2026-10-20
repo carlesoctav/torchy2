@@ -51,6 +51,7 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
         str(repo_root): remote_root,
     }
 
+    print(f"DEBUGPRINT[2]: bench.py:54: extra_args={extra_args}")
     if extra_args.reuse:
         inference_infra_config["reuse"] = True
         env_infra_config["reuse"] = True

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import random
 import signal
 from typing import Any
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, GenerationConfig
 from trl.experimental.async_grpo.async_grpo_config import AsyncGRPOConfig
 from trl.experimental.async_grpo.async_rollout_worker import (
     AsyncRolloutWorker,
@@ -41,6 +42,7 @@ class ThinkingBudgetRolloutLoop(_AsyncRolloutLoop):
             "n": 1,
             "return_token_ids": True,
             "logprobs": 0,
+            "seed": random.getrandbits(63),
             "thinking_token_budget": self.thinking_budget,
         }
         if self.min_p is not None:
@@ -97,6 +99,13 @@ def make(
         if processing_class.pad_token is None:
             processing_class.pad_token = processing_class.eos_token
 
+    eos_token_ids = GenerationConfig.from_pretrained(model_name).eos_token_id
+    if eos_token_ids is None:
+        eos_token_ids = []
+    elif isinstance(eos_token_ids, int):
+        eos_token_ids = [eos_token_ids]
+    if processing_class.eos_token_id not in eos_token_ids:
+        eos_token_ids = [processing_class.eos_token_id, *eos_token_ids]
     tools = env_config.get("tools")
     environment_factory = env_config.get("environment_factory")
 
@@ -143,6 +152,7 @@ def make(
         dataset=dataset,
         reward_funcs=reward_funcs,
         processing_class=processing_class,
+        eos_token_ids=eos_token_ids,
         tools=tools,
         environment_factory=environment_factory,
         thinking_budget=thinking_budget,
