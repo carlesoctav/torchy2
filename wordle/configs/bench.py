@@ -47,7 +47,7 @@ def get_config() -> sws.Config:
     config.eval.max_inflight_tasks = 12 
     config.eval.log_completions = False
     config.eval.num_completions_to_print = 0
-    config.eval.chat_template_kwargs = {"enable_thinking": False}
+    config.eval.chat_template_kwargs = {"enable_thinking": True}
     config.eval.temperature= 0.6
     config.eval.top_p= 0.95
     config.eval.top_k= 20
