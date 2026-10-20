@@ -22,7 +22,7 @@ overrides = [
     { name = "torch", specifier = "==2.13.0" },
     { name = "torchvision", specifier = "==0.28.0" },
     { name = "transformers", specifier = ">=5.10.4" },
-    { name = "trl", specifier = "==1.14.1" },
+    { name = "trl", specifier = "==1.16.0" },
     { name = "vllm", specifier = "==0.30.0" },
 ]
 
@@ -6352,18 +6352,25 @@ wheels = [
 
 [[package]]
 name = "trl"
-version = "1.14.1"
+version = "1.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "accelerate" },
     { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "jinja2" },
+    { name = "numpy", version = "2.3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
     { name = "packaging" },
+    { name = "pandas" },
+    { name = "psutil" },
+    { name = "pyarrow" },
+    { name = "pyyaml" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/01/36/11cff1630c5b76cd556a8a28feaf1489a51854b088dce6bf757c07916ef9/trl-1.14.1.tar.gz", hash = "sha256:d4bfa9d408b324088136477826173695df6f1d301b078ab2a29ef8519d0c10b7", size = 764756, upload-time = "2026-09-29T13:28:02.543Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/33/2cce5d6c5398d6de2dad22afa713f1a65569910685ab3598d1767d4d8483/trl-1.16.0.tar.gz", hash = "sha256:999bd4a85b08870b7bfa387e1efa5177d2a4b88fe82b2526a057ac5d3cc600cd", size = 774704, upload-time = "2026-10-15T17:56:37.501Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/71/68c462d2e5977db75a055f6fbdfe7ee36dcf47df710e93a40d37ce984a7f/trl-1.14.1-py3-none-any.whl", hash = "sha256:ae406a3ca113f23da33f297b4a067d7b25aa658ab9e5b226d36e775a55d9dfe5", size = 925516, upload-time = "2026-09-29T13:28:00.979Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/4d/c5eaed26c16bfafc2f724e6be320f94a4f26bf4bb4ba62917114dd9b60c8/trl-1.16.0-py3-none-any.whl", hash = "sha256:c4726e139dd40e1a41661511c639c8a68416782b2e3e8c0befebd77bb7ba0396", size = 948205, upload-time = "2026-10-15T17:56:35.64Z" },
 ]
 
 [[package]]
@@ -6810,7 +6817,7 @@ requires-dist = [
     { name = "sws-config", specifier = ">=0.10.0" },
     { name = "torchy-core", editable = "../common" },
     { name = "trackio", specifier = ">=0.39.0" },
-    { name = "trl", extras = ["vllm"], specifier = ">=0.24.0" },
+    { name = "trl", extras = ["vllm"], specifier = ">=1.16.0" },
     { name = "vllm" },
 ]
 
