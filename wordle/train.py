@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+#!/usr/bin/env python3 from __future__ import annotations
 
 import logging
 import os
@@ -15,6 +14,12 @@ from torchy_core import make_rollout_worker
 from torchy_core.patch import wait_lora_patch
 
 from env import make_env
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +102,9 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     try:
         trainer.train(resume_from_checkpoint=last_checkpoint)
         logger.info(f"[done] Finished training. global_step={trainer.state.global_step}")
-    except KeyboardInterrupt:
-        final_dir = os.path.join(output_dir, f"checkpoint-{trainer.state.global_step}")
+    finally:
         logger.info(f"save final-checkpoint training. global_step={trainer.state.global_step}")
-        save_lora_adapter(
-            trainer.model,
-            trainer.accelerator,
-            trainer._adapter_name,
-            final_dir,
-        )
-        logger.info(f"[final] Saved final adapter to {final_dir}")
+        trainer._save_checkpoint(trainer.model, trial=None)
 
 
 

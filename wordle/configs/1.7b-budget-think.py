@@ -29,14 +29,15 @@ def get_config() -> sws.Config:
     config.inference.vllm.port = 8000
     config.inference.vllm.max_model_len = 8192
     config.inference.vllm.gpu_memory_utilization = 0.95
-    config.inference.vllm.max_lora_rank = 8
+    config.inference.vllm.max_lora_rank = 1
     config.inference.vllm.max_loras = 6
     config.inference.vllm.logprobs_mode = "processed_logprobs"
     config.inference.vllm.generation_config = "vllm"
     config.inference.vllm.reasoning_parser = "qwen3"
     config.inference.vllm.enable_lora = True
-    config.inference.vllm.kv_offloading_backend = "native"
-    config.inference.vllm.kv_offloading_size = 20
+    # config.inference.vllm.kv_offloading_backend = "native"
+    # config.inference.vllm.kv_offloading_size = 20
+    config.inference.vllm.kv_cache_dtype = "fp8"
     config.inference.vllm.env_vars = {
         "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "1",
         "VLLM_SERVER_DEV_MODE": "1",
@@ -77,7 +78,7 @@ def get_config() -> sws.Config:
     config.train.grpo.vllm_server_base_url = "http://127.0.0.1:8000"
     config.train.grpo.report_to = "trackio"
     config.train.grpo.log_completions = False
-    config.train.grpo.num_completions_to_print = 0
+    config.train.grpo.num_completions_to_print = 1 
     config.train.grpo.chat_template_kwargs = {"enable_thinking": True}
 
     config.env.name = "wordle"
