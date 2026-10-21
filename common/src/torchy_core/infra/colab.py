@@ -4,7 +4,6 @@ import logging
 import shlex
 import signal
 import subprocess
-import sys
 import threading
 import time
 import urllib.request
@@ -12,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("torchy_core.infra")
+logger = logging.getLogger(__name__)
 
 
 def wait_for_http_ready(url: str = "http://127.0.0.1:8000/health", timeout: int = 300, interval: float = 3.0) -> bool:
@@ -157,7 +156,16 @@ class ColabProcess:
             raise subprocess.TimeoutExpired(self.cmd, timeout)
         return self.returncode if self.returncode is not None else 0
 
-    def terminate(self) -> None:
+    def interrupt(self) -> None:
+        if self.returncode is not None:
+            return
+        subprocess.run(
+            ["ssh", self.session.session, f"tmux send-keys -t {shlex.quote(self.proc_id)} C-c 2>/dev/null || true"],
+            capture_output=True,
+            timeout=5,
+        )
+
+    def kill(self) -> None:
         self._terminated = True
         subprocess.run(
             ["ssh", self.session.session, f"tmux kill-session -t {shlex.quote(self.proc_id)} 2>/dev/null || true"],
@@ -165,11 +173,22 @@ class ColabProcess:
             timeout=5,
         )
         if self.returncode is None:
-            self.returncode = -signal.SIGTERM
+            self.returncode = -signal.SIGKILL
         self._done_event.set()
 
-    def kill(self) -> None:
-        self.terminate()
+    def terminate(self, grace_period: float = 30.0) -> None:
+        if self.returncode is not None:
+            return
+        self.interrupt()
+        if not self._done_event.wait(timeout=grace_period):
+            logger.warning(f"[{self.proc_id}] Process did not exit within {grace_period}s; killing tmux session...")
+            self.kill()
+        else:
+            subprocess.run(
+                ["ssh", self.session.session, f"tmux kill-session -t {shlex.quote(self.proc_id)} 2>/dev/null || true"],
+                capture_output=True,
+                timeout=5,
+            )
 
     def stop(self) -> None:
         self.terminate()
@@ -277,12 +296,14 @@ class ColabSession:
             capture_output=True,
         )
         if check.returncode == 0:
+            logger.info("[ensure_master] ssh master  is up and running")
             for lf in self.local_forwards:
                 subprocess.run(["ssh", "-O", "forward", "-L", lf, self.session], capture_output=True)
             for rf in self.remote_forwards:
                 subprocess.run(["ssh", "-O", "forward", "-R", rf, self.session], capture_output=True)
             return
 
+        logger.info("[ensure_master] ssh master connection is down")
         subprocess.run(["ssh", "-O", "exit", self.session], capture_output=True)
 
         args = [
@@ -355,7 +376,7 @@ class ColabSession:
 
         out_log = f"{remote_dir}/out.log"
         done_file = f"{remote_dir}/done"
-        wrapped_main = f"( {cmd_str} ) 2>&1 | tee {shlex.quote(out_log)}; echo ${{PIPESTATUS[0]}} > {shlex.quote(done_file)}"
+        wrapped_main = f"( {cmd_str} ) 2>&1 | tee -i {shlex.quote(out_log)}; echo ${{PIPESTATUS[0]}} > {shlex.quote(done_file)}"
 
         steps = [
             f"mkdir -p {shlex.quote(remote_dir)}",
@@ -391,16 +412,16 @@ def monitor_process(process: Any, stop_event: threading.Event, error_queue: list
 
 
 class ProcessGroup:
-    def __init__(self):
+    def __init__(self, grace_period: float = 30):
         self.processes: dict[str, Any] = {}
         self.sessions: dict[str, ColabSession] = {}
         self.monitor_threads: list[threading.Thread] = []
         self.error_queue: list[Exception] = []
         self.stop_events: dict[str, threading.Event] = {}
+        self.grace_period = grace_period
+        self._cleaned_up = False
 
     def __enter__(self) -> ProcessGroup:
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
@@ -409,21 +430,13 @@ class ProcessGroup:
         elif isinstance(exc, Exception):
             logger.error(f"Error occurred: {exc}")
         self.cleanup()
-        if exc_type is KeyboardInterrupt:
-            sys.exit(1)
-
-    def _signal_handler(self, signum: int, frame: Any) -> None:
-        logger.warning(f"Received signal {signum}, cleaning up...")
-        self.cleanup()
-        sys.exit(1)
 
     def add(self, name: str, process: Any, session: ColabSession | None = None) -> Any:
         self.processes[name] = process
-        sess = session or getattr(process, "session", None)
-        if sess is not None:
-            sess_name = getattr(sess, "session", str(id(sess)))
-            if sess_name not in self.sessions:
-                self.sessions[sess_name] = sess
+        if session is not None:
+            self.sessions[session.session] = session
+        elif isinstance(process, ColabProcess):
+            self.sessions[process.session.session] = process.session
 
         stop_event = threading.Event()
         self.stop_events[name] = stop_event
@@ -444,25 +457,38 @@ class ProcessGroup:
                 logger.error(f"Error in process group: {self.error_queue[0]}")
                 logger.error("Terminating all processes...")
                 self.cleanup()
-                sys.exit(1)
+                raise self.error_queue[0]
             if all(event.is_set() for event in events):
                 return
             time.sleep(0.5)
 
     def cleanup(self) -> None:
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+
         logger.info("Cleaning up ProcessGroup processes...")
         for name, proc in self.processes.items():
-            if hasattr(proc, "poll") and proc.poll() is None:
-                logger.info(f"Terminating {name}...")
-                if hasattr(proc, "terminate"):
+            if proc.poll() is None:
+                if isinstance(proc, ColabProcess):
+                    logger.info(f"interrupting {proc.proc_id} on {proc.session.session}")
+                    proc.interrupt()
+                elif isinstance(proc, subprocess.Popen):
+                    logger.info(f"interrupting {proc}")
+                    proc.send_signal(signal.SIGINT)
+                else:
+                    logger.info(f"force terminate somehow")
                     proc.terminate()
-                elif hasattr(proc, "kill"):
+
+        for name, proc in self.processes.items():
+            if proc.poll() is None:
+                try:
+                    proc.wait()
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Process '{name}' did not exit within grace period; killing...")
                     proc.kill()
 
         for name, sess in self.sessions.items():
-            if getattr(sess, "stop_vm", False):
+            if sess.stop_vm:
                 logger.info(f"stop_vm=True on session '{name}'; stopping VM...")
-                if callable(getattr(sess, "terminate_vm", None)):
-                    sess.terminate_vm()
-                elif callable(getattr(sess, "stop_vm", None)):
-                    sess.stop_vm()
+                sess.terminate_vm()
