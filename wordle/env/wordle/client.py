@@ -9,18 +9,18 @@ from textarena_env import TextArenaAction, TextArenaEnv as OpenEnvTextArenaEnvCl
 
 DEFAULT_ENV_URL = "http://127.0.0.1:8001"
 
-PROMPT = """You are an expert Wordle solver with deep knowledge of English vocabulary, letter frequency patterns, and optimal guessing strategies.
-Follow these rules to play Wordle:
+PROMPT = """You are playing Wordle.
+A secret 5-letter English word has been chosen. Your goal is to guess it within 6 attempts.
 
-1. The target is a 5-letter English word
-2. You have 6 attempts to guess the correct word
-3. After each guess, you receive color-coded feedback:
-   - GREEN (G): Letter is correct and in the correct position
-   - YELLOW (Y): Letter is in the word but in the wrong position
-   - GRAY (X): Letter is not in the word at all
-4. All guesses must be valid 5-letter English words
-5. You cannot reuse a word you've already guessed
-6. Use the tool `guess` to make a guess.
+After each guess, you receive color-coded feedback:
+- G (green): Letter is correct and in the correct position
+- Y (yellow): Letter exists in the word but in the wrong position
+- X (wrong): Letter is not in the word
+
+Rules:
+1. All guesses must be valid 5-letter English words.
+2. You cannot reuse a word you have already guessed.
+3. Use the tool `guess` to make each guess.
 """
 
 
@@ -29,8 +29,8 @@ class TRLWordleEnv:
         self.env_url = env_url
         self._client = OpenEnvTextArenaEnvClient(base_url=self.env_url).sync()
         self._last_full_feedback = ""
-        self.obv_reward = None
-        self.reward_signals = None
+        self.won = False
+        self._max_partial_reward = 0.0
         self.done = False
 
     def reset(self, **kwargs: Any) -> str | None:
@@ -41,28 +41,28 @@ class TRLWordleEnv:
             if result.observation.messages
             else result.observation.prompt
         )
-        self.obv_reward = None
-        self.reward_signals = None
+        self.won = False
+        self._max_partial_reward = 0.0
         self.done = False
-        return self._last_full_feedback
+        return None
 
     def guess(self, guess: str) -> str:
-        """Make a guess in the Wordle environment.
+        """Make a guess in the Wordle game.
 
         Args:
-            guess: The guessed word, formatted as '[abcde]'
+            guess: The 5-letter word to guess (e.g. 'crane')
 
         Returns:
             The feedback message from the environment.
         """
         if self.done:
-            if self.obv_reward is None:
-                return "game is over. too much making mistake"
-            else:
-                final_feedback = "you win" if self.obv_reward == 1.0 else "you lose"
-                return f"game is over. {final_feedback}"
+            return "Game is over. No more guesses allowed."
 
-        result = self._client.step(TextArenaAction(message=guess))
+        formatted_guess = guess.strip()
+        if not (formatted_guess.startswith("[") and formatted_guess.endswith("]")):
+            formatted_guess = f"[{formatted_guess}]"
+
+        result = self._client.step(TextArenaAction(message=formatted_guess))
         full_feedback = (
             result.observation.messages[0].content
             if result.observation.messages
@@ -70,23 +70,35 @@ class TRLWordleEnv:
         )
         feedback = full_feedback[len(self._last_full_feedback) :]
         self._last_full_feedback = full_feedback
-        if "Feedback:" not in feedback and result.reward != 1.0:
-            self.obv_reward = None
-            self.reward_signals = None
-        else:
-            self.obv_reward = float(result.reward)
-            self.reward_signals = result.observation.info["reward_signals"]
+
+        if result.reward == 1.0:
+            self.won = True
+            self._max_partial_reward = 1.0
+        elif (
+            "reward_signals" in result.observation.info
+            and "wordle.greens" in result.observation.info["reward_signals"]
+        ):
+            current_partial = (
+                result.observation.info["reward_signals"]["wordle.greens"] * 5 * 0.05
+                + result.observation.info["reward_signals"]["wordle.yellows"] * 5 * 0.025
+            )
+            self._max_partial_reward = max(self._max_partial_reward, current_partial)
+
         self.done = bool(result.done)
+        if self.done:
+            if "game is over" not in feedback.lower():
+                if self.won:
+                    feedback += "\n[GAME] Game is over. You won!"
+                elif "turn limit" in feedback.lower():
+                    feedback += "\n[GAME] Game is over. Turn limit reached."
+                else:
+                    feedback += "\n[GAME] Game is over."
         return feedback
 
     def get_reward(self) -> float:
-        if self.obv_reward is None:
-            return 0.0
-
-        if self.obv_reward != 1.0:
-            return self.reward_signals["wordle.greens"] * 5 * 0.05 + self.reward_signals["wordle.yellows"] * 5 * 0.025
-        else:
+        if self.won:
             return 1.0
+        return self._max_partial_reward
 
 
 def make(

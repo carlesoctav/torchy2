@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 from uuid import uuid4
 
@@ -11,6 +12,24 @@ import nltk
 nltk.download("words", quiet=True)
 nltk.download("averaged_perceptron_tagger_eng", quiet=True)
 
+from textarena.envs.Wordle.env import WordleEnv
+
+# Pre-cache word list and dictionary once at module load to avoid 1.5s+ POS-tagging per session.
+_warmup_wordle = WordleEnv()
+_WORDLE_WORD_LIST = _warmup_wordle.word_list
+_WORDLE_DICTIONARY = _warmup_wordle.dictionary
+
+
+def _cached_wordle_init(self, word_length: int = 5, num_guesses: int = 6, hardcore: bool = False) -> None:
+    super(WordleEnv, self).__init__()
+    self.word_length = word_length
+    self.num_guesses = num_guesses
+    self.word_list = _WORDLE_WORD_LIST
+    self.dictionary = _WORDLE_DICTIONARY
+
+
+WordleEnv.__init__ = _cached_wordle_init
+
 import uvicorn
 from openenv.core.env_server.http_server import create_app
 from textarena_env.models import TextArenaAction, TextArenaObservation
@@ -20,6 +39,15 @@ from textarena_env.server.gradio_ui import build_textarena_gradio_app
 
 class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
     SUPPORTS_CONCURRENT_SESSIONS = True
+
+    def __init__(
+        self,
+        *args,
+        error_allowance: int = 5,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.error_allowance = error_allowance
 
     def reset(
         self,
@@ -36,6 +64,11 @@ class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
             env.full_observations = {}
 
         self._ta_env.reset(num_players=self.num_players, seed=seed)
+
+        base_env = self._ta_env
+        while hasattr(base_env, "env"):
+            base_env = base_env.env
+        base_env.state.error_allowance = self.error_allowance
 
         for provider in self._reward_providers:
             provider.reset()
@@ -54,13 +87,29 @@ class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
 
         return observation
 
+    def step(self, action: TextArenaAction) -> TextArenaObservation:
+        obs = super().step(action)
+        game_info = self._ta_env.state.game_info.get(0, {})
+        if obs.done and game_info.get("invalid_move"):
+            reason = game_info.get("reason", "Too many invalid moves.")
+            game_over_msg = (
+                f"\n[GAME] You attempted an invalid move. Reason: {reason}\n"
+                "[GAME] Game is over. You exceeded the error allowance."
+            )
+            if obs.messages:
+                obs.messages[0].content += game_over_msg
+            else:
+                obs.prompt += game_over_msg
+        return obs
 
-def create_textarena_environment() -> OpenEnvTextArenaEnvServer:
+
+def create_textarena_environment(error_allowance: int = 5) -> OpenEnvTextArenaEnvServer:
     return OpenEnvTextArenaEnvServer(
         env_id="Wordle-v0",
         num_players=1,
         max_turns=None,
-        download_nltk=True,
+        download_nltk=False,
+        error_allowance=error_allowance,
     )
 
 
@@ -69,13 +118,14 @@ def main() -> None:
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind server")
     parser.add_argument("--port", type=int, default=8001, help="Port to listen on")
     parser.add_argument("--max-sessions", type=int, default=256, help="Maximum concurrent environment sessions")
+    parser.add_argument("--error-allowance", type=int, default=5, help="Error allowance before game termination")
     parser.add_argument("--enable-web-interface", action=argparse.BooleanOptionalAction, default=True, help="Enable Gradio web UI")
     args, _ = parser.parse_known_args()
 
     gradio_builder = build_textarena_gradio_app if args.enable_web_interface else None
 
     app = create_app(
-        create_textarena_environment,
+        functools.partial(create_textarena_environment, error_allowance=args.error_allowance),
         TextArenaAction,
         TextArenaObservation,
         env_name="textarena_env",
