@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -17,6 +18,8 @@ def build_vllm_command(vllm_config: dict[str, Any]) -> list[str]:
         elif isinstance(value, (list, tuple)):
             for item in value:
                 cmd.extend([flag, str(item)])
+        elif isinstance(value, dict):
+            cmd.extend([flag, json.dumps(value)])
         else:
             cmd.extend([flag, str(value)])
 
