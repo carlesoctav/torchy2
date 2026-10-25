@@ -11,6 +11,8 @@ def build_env_server_command(env_name: str, server_config: dict[str, Any]) -> li
         if isinstance(value, bool):
             if value:
                 cmd.append(flag)
+            else:
+                cmd.append(f"--no-{key.replace('_', '-')}")
         elif isinstance(value, (list, tuple)):
             for item in value:
                 cmd.extend([flag, str(item)])

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3 from __future__ import annotations
-
 import logging
 import os
 import sys
@@ -11,7 +9,13 @@ if str(exp_dir) not in sys.path:
 
 import sws
 from torchy_core import make_rollout_worker
-from torchy_core.patch import wait_lora_patch
+from torchy_core.patch import (
+    patch_fp8_training,
+    patch_rollout_dataset,
+    patch_skip_zero_advantage,
+    patch_trackio_step,
+    wait_lora_patch,
+)
 
 from env import make_env
 
@@ -30,10 +34,12 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     output_dir = config.output_dir
     env_name = config.env.name
     env_client_dict = config.env.client.to_dict()
-    rollout_worker_name = config.rollout_worker_name
-    rollout_worker_dict = config.rollout_worker.to_dict()
-    resume_checkpoint = config.resume_checkpoint
 
+    rollout_worker_name = config.get("rollout_worker_name", None)
+    resume_checkpoint = config.get("resume_checkpoint", False)
+
+
+    env_client_dict = make_env(env_name, env_client_dict)
     last_checkpoint = None
 
     handler = logging.StreamHandler()
@@ -48,30 +54,25 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
     core_logger.setLevel(logging.INFO)
 
     wait_lora_patch(max_wait=300, retry_interval=2.0, initial_delay=0.0)
+    if config.get("fp8_train", False):
+        patch_fp8_training()
+    if config.get("log_rollout", False):
+        patch_rollout_dataset(config.get("log_every", 1))
+    if config.train.grpo.get("report_to") == "trackio" or config.get("trackio", False):
+        patch_trackio_step()
+    if config.get("skip_zero_advantage", False):
+        patch_skip_zero_advantage()
 
-    # import trl.experimental.async_grpo.async_grpo_trainer as async_grpo_trainer
     from functools import cache
 
     from kernels import get_kernel
     from peft import LoraConfig
     from transformers.trainer_utils import get_last_checkpoint
     from trl.experimental.async_grpo import AsyncGRPOConfig, AsyncGRPOTrainer, packing
-    from trl.experimental.async_grpo.async_grpo_trainer import save_lora_adapter
+
 
     packing._flash_attn = cache(lambda : get_kernel("kernels-community/flash-attn2", version = 3))
 
-    # _create_model_from_path = async_grpo_trainer.create_model_from_path
-
-    # def _create_model_untied(model_id, **kwargs):
-    #     model = _create_model_from_path(model_id, **kwargs)
-    #     if hasattr(model, "lm_head") and hasattr(model, "config"):
-    #         model.lm_head.weight = torch.nn.Parameter(model.lm_head.weight.detach().clone())
-    #         model.config.tie_word_embeddings = False
-    #     return model
-    #
-    # async_grpo_trainer.create_model_from_path = _create_model_untied
-
-    env_client_dict = make_env(env_name, env_client_dict)
     if "peft_config" in model_dict:
         model_dict["peft_config"] = LoraConfig(**model_dict["peft_config"])
 
@@ -79,6 +80,7 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
 
     rollout_worker = None
     if rollout_worker_name is not None:
+        rollout_worker_dict = config.rollout_worker.to_dict()
         rollout_worker = make_rollout_worker(
             rollout_worker_name, rollout_worker_dict, model_dict, env_client_dict, args=args
         )
