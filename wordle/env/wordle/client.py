@@ -30,8 +30,10 @@ class TRLWordleEnv:
         self._client = OpenEnvTextArenaEnvClient(base_url=self.env_url).sync()
         self._last_full_feedback = ""
         self.won = False
+        self.failed = False
         self._max_partial_reward = 0.0
         self.done = False
+        self.guess_count = 0
 
     def reset(self, **kwargs: Any) -> str | None:
         seed = kwargs.get("seed")
@@ -42,8 +44,10 @@ class TRLWordleEnv:
             else result.observation.prompt
         )
         self.won = False
+        self.failed = False
         self._max_partial_reward = 0.0
         self.done = False
+        self.guess_count = 0
         return None
 
     def guess(self, guess: str) -> str:
@@ -55,6 +59,7 @@ class TRLWordleEnv:
         Returns:
             The feedback message from the environment.
         """
+        self.guess_count += 1
         if self.done:
             return "Game is over. No more guesses allowed."
 
@@ -71,20 +76,29 @@ class TRLWordleEnv:
         feedback = full_feedback[len(self._last_full_feedback) :]
         self._last_full_feedback = full_feedback
 
-        if result.reward == 1.0:
-            self.won = True
-            self._max_partial_reward = 1.0
-        elif (
-            "reward_signals" in result.observation.info
-            and "wordle.greens" in result.observation.info["reward_signals"]
-        ):
-            current_partial = (
-                result.observation.info["reward_signals"]["wordle.greens"] * 5 * 0.05
-                + result.observation.info["reward_signals"]["wordle.yellows"] * 5 * 0.025
-            )
-            self._max_partial_reward = max(self._max_partial_reward, current_partial)
+        is_invalid = bool(
+            result.observation.info.get("invalid_move")
+            or (result.done and result.reward < 0.0)
+            or (result.done and "invalid move" in feedback.lower())
+        )
+        if is_invalid:
+            self.failed = True
+            self.done = True
+        else:
+            if result.reward == 1.0:
+                self.won = True
+                self._max_partial_reward = 1.0
+            elif (
+                "reward_signals" in result.observation.info
+                and "wordle.greens" in result.observation.info["reward_signals"]
+            ):
+                current_partial = (
+                    result.observation.info["reward_signals"]["wordle.greens"] * 5 * 0.05
+                    + result.observation.info["reward_signals"]["wordle.yellows"] * 5 * 0.025
+                )
+                self._max_partial_reward = max(self._max_partial_reward, current_partial)
+            self.done = bool(result.done)
 
-        self.done = bool(result.done)
         if self.done:
             if "game is over" not in feedback.lower():
                 if self.won:
@@ -96,6 +110,8 @@ class TRLWordleEnv:
         return feedback
 
     def get_reward(self) -> float:
+        if self.failed or self.guess_count == 0:
+            return -1.0
         if self.won:
             return 1.0
         return self._max_partial_reward

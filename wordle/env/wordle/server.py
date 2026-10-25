@@ -43,7 +43,7 @@ class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
     def __init__(
         self,
         *args,
-        error_allowance: int = 5,
+        error_allowance: int = 0,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -90,11 +90,16 @@ class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
     def step(self, action: TextArenaAction) -> TextArenaObservation:
         obs = super().step(action)
         game_info = self._ta_env.state.game_info.get(0, {})
-        if obs.done and game_info.get("invalid_move"):
-            reason = game_info.get("reason", "Too many invalid moves.")
+        if game_info.get("invalid_move"):
+            obs.done = True
+            obs.reward = -1.0
+            obs.info["invalid_move"] = True
+            self._ta_env.state.rewards = {0: -1.0}
+            self._ta_env.state.done = True
+            reason = game_info.get("reason", "Invalid move.")
             game_over_msg = (
                 f"\n[GAME] You attempted an invalid move. Reason: {reason}\n"
-                "[GAME] Game is over. You exceeded the error allowance."
+                "[GAME] Game is over."
             )
             if obs.messages:
                 obs.messages[0].content += game_over_msg
@@ -103,7 +108,7 @@ class OpenEnvTextArenaEnvServer(TextArenaEnvironment):
         return obs
 
 
-def create_textarena_environment(error_allowance: int = 5) -> OpenEnvTextArenaEnvServer:
+def create_textarena_environment(error_allowance: int = 0) -> OpenEnvTextArenaEnvServer:
     return OpenEnvTextArenaEnvServer(
         env_id="Wordle-v0",
         num_players=1,
@@ -118,7 +123,7 @@ def main() -> None:
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind server")
     parser.add_argument("--port", type=int, default=8001, help="Port to listen on")
     parser.add_argument("--max-sessions", type=int, default=256, help="Maximum concurrent environment sessions")
-    parser.add_argument("--error-allowance", type=int, default=5, help="Error allowance before game termination")
+    parser.add_argument("--error-allowance", type=int, default=0, help="Error allowance before game termination")
     parser.add_argument("--enable-web-interface", action=argparse.BooleanOptionalAction, default=True, help="Enable Gradio web UI")
     args, _ = parser.parse_known_args()
 
