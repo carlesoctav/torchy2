@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import sws
+from torchao.core.config import config_to_dict
+from torchao.quantization import (
+    Float8DynamicActivationFloat8WeightConfig,
+    PerRow,
+)
 
 
 def get_config() -> sws.Config:
@@ -8,11 +15,16 @@ def get_config() -> sws.Config:
 
     config.exp_name = "qwen3-1.7b-grpo-wordle"
     config.project_name = "wordle-budget-think"
-    config.bucket_id = "carlesoctav/budget-think"
+    config.bucket = "carlesoctav/budget-think"
     config.output_dir = lambda: f"/content/lora/{config.project_name}/{config.exp_name}"
+    config.aot_bucket = "carlesoctav/vllm-aot"
     config.seed = 3407
     config.remote_root = "/content/torchy2"
     config.resume_checkpoint = False
+
+    config.fp8_train = False
+    config.log_rollout = True
+    config.log_every = lambda: config.train.grpo.gradient_accumulation_steps
 
     config.rollout_worker_name = "thinking_budget_rollout"
     config.rollout_worker.thinking_budget = 800
@@ -20,7 +32,7 @@ def get_config() -> sws.Config:
 
     config.inference.infra.session = "vllm"
     config.inference.infra.gpu = "l4"
-    config.inference.infra.volumes = lambda : [f"{config.bucket_id}:/content/lora"]
+    config.inference.infra.volumes = lambda : [f"{config.bucket}:/content/lora", f"{config.aot_bucket}:/content/vllm-aot"]
     config.inference.infra.local_forwards = ["8000:localhost:8000"]
     config.inference.infra.stop_vm = False
 
@@ -38,14 +50,28 @@ def get_config() -> sws.Config:
     # config.inference.vllm.kv_offloading_backend = "native"
     # config.inference.vllm.kv_offloading_size = 20
     config.inference.vllm.kv_cache_dtype = "fp8"
+
     config.inference.vllm.env_vars = {
         "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "1",
         "VLLM_SERVER_DEV_MODE": "1",
+        # "VLLM_CACHE_ROOT": "/content/vllm-aot"
     }
+
+    # config.inference.vllm.quantization = "torchao"
+    # config.inference.vllm.hf_overrides = {
+    #     "quantization_config_dict_json": json.dumps(
+    #         config_to_dict(
+    #             Float8DynamicActivationFloat8WeightConfig(
+    #                 granularity = PerRow(),
+    #                 activation_value_lb = 1e-12,
+    #             )
+    #         )
+    #     )
+    # }
 
     config.train.infra.session = "trainer"
     config.train.infra.gpu = "l4"
-    config.train.infra.volumes = lambda : [f"{config.bucket_id}:/content/lora"]
+    config.train.infra.volumes = lambda : [f"{config.bucket}:/content/lora"]
     config.train.infra.remote_forwards = ["8000:localhost:8000"]
     config.train.infra.local_forwards = ["8001:localhost:8001"]
     config.train.infra.stop_vm = False
@@ -77,7 +103,7 @@ def get_config() -> sws.Config:
     config.train.grpo.save_steps = 100
     config.train.grpo.vllm_server_base_url = "http://127.0.0.1:8000"
     config.train.grpo.report_to = "trackio"
-    config.train.grpo.log_completions = False
+    config.train.grpo.log_completions = True
     config.train.grpo.num_completions_to_print = 1 
     config.train.grpo.chat_template_kwargs = {"enable_thinking": True}
 
