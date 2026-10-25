@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import functools
 import inspect
 import keyword
@@ -331,3 +333,33 @@ def run(
     if unused:
         raise ValueError(f"Unused extra arguments: {unused}")
     return main(final)
+
+
+def sws_run_async(
+    main,
+    *,
+    argv: Sequence[str] | None = None,
+    config_flag: str = "--config",
+    default_func: str = "get_config",
+    forward_extras: bool = False,
+):
+    args = list(sys.argv[1:] if argv is None else argv)
+    config_paths, args = _split_config_args(args, config_flag=config_flag)
+
+    if config_paths:
+        builder = merge_config_builders(config_paths, default_func=default_func)
+    else:
+        caller_file = inspect.stack()[1].filename
+        builder = _load_default_builder(caller_file, default_func=default_func)
+
+    final, unused = builder.finalize(args, return_unused_argv=True)
+    if forward_extras:
+        result = main(final, unused)
+    elif unused:
+        raise ValueError(f"Unused extra arguments: {unused}")
+    else:
+        result = main(final)
+
+    if inspect.iscoroutine(result):
+        return asyncio.run(result)
+    return result
