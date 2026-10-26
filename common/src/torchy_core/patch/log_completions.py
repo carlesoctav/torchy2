@@ -56,7 +56,7 @@ def _log_table(samples: list[Any], gen_step: int, step: int | None = None) -> No
         "model_version": [int(s.model_version) for s in samples],
         "prompt": [format_entry(s.prompt) for s in samples],
         "completion": [format_entry(s.completion) for s in samples],
-        "reward": [float(s.metrics.get("reward", 0.0)) for s in samples],
+        "reward": [float(s.metrics.get("reward_kept", s.metrics.get("reward", 0.0))) for s in samples],
         "advantage": [float(s.advantage) for s in samples],
     }
     df = pd.DataFrame(table)
@@ -150,6 +150,8 @@ def patch_rollout_dataset(log_every: int = 1) -> None:
                 "completion_mask": sample.completion_mask,
                 "old_log_probs": sample.old_log_probs,
                 "sampling_mask": sample.sampling_mask,
+                "sampler_ids": sample.sampler_ids,
+                "sampler_log_probs": sample.sampler_log_probs,
                 "advantage": sample.advantage,
                 "group_id": sample.group_id,
                 "metrics": sample.metrics,
