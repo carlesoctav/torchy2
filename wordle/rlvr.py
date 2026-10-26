@@ -60,8 +60,6 @@ def main(config: sws.FinalConfig, unused_argv: list[str] | None = None):
         patch_rollout_dataset(config.get("log_every", 1))
     if config.train.grpo.get("report_to") == "trackio" or config.get("trackio", False):
         patch_trackio_step()
-    if config.get("skip_zero_advantage", False):
-        patch_skip_zero_advantage()
 
     from functools import cache
 

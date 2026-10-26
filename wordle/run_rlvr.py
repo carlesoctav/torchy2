@@ -31,7 +31,7 @@ def get_config() -> sws.Config:
 
 def build_trainer_command(config_path: str, *other_argv: str) -> list[str]:
     return [
-        "uv", "run", "python", "train.py",
+        "uv", "run", "python", "rlvr.py",
         "--config", config_path,
         *other_argv,
     ]
@@ -90,11 +90,11 @@ def main(cfg: sws.FinalConfig, unused_argv: list[str] | None = None):
         logger.info("[Dry Run] Trainer command: " + " ".join(trainer_cmd))
         return
 
-    log_dir = exp_dir / "logs"
+    log_dir = exp_dir / "logs" / cfg.project_name
     log_dir.mkdir(parents=True, exist_ok=True)
-    vllm_log = log_dir / f"{cfg.exp_name}_vllm.log"
-    trainer_log = log_dir / f"{cfg.exp_name}_trainer.log"
-    env_server_log = log_dir / f"{cfg.exp_name}_env_server.log"
+    vllm_log = log_dir / "vllm.log"
+    trainer_log = log_dir / f"trainer.log"
+    env_server_log = log_dir / f"env_server.log"
     vllm_log.unlink(missing_ok=True)
     trainer_log.unlink(missing_ok=True)
     env_server_log.unlink(missing_ok=True)
