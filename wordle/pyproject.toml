@@ -43,5 +43,5 @@ build-backend = "uv_build"
 [tool.uv.sources]
 torchy-core = { path = "../common", editable = true }
 openenv-textarena = { git = "https://huggingface.co/spaces/openenv/wordle" }
-trl = { git = "https://github.com/huggingface/trl" }
+trl = { git = "https://github.com/carlesoctav/trl" }
 

@@ -22,7 +22,7 @@ overrides = [
     { name = "torch", specifier = "==2.13.0" },
     { name = "torchvision", specifier = "==0.28.0" },
     { name = "transformers", specifier = ">=5.10.4" },
-    { name = "trl", git = "https://github.com/huggingface/trl" },
+    { name = "trl", git = "https://github.com/carlesoctav/trl" },
     { name = "vllm", specifier = "==0.30.0" },
 ]
 
@@ -6364,7 +6364,7 @@ wheels = [
 [[package]]
 name = "trl"
 version = "1.17.0.dev0"
-source = { git = "https://github.com/huggingface/trl#ea8cb1b57bd29da6deb1fc2ee9f1f8ff77c7038e" }
+source = { git = "https://github.com/carlesoctav/trl#7c58a44c9a27b5b472996ecb27d12b91d083ff8e" }
 dependencies = [
     { name = "accelerate" },
     { name = "datasets" },
@@ -6827,7 +6827,7 @@ requires-dist = [
     { name = "torchao", specifier = ">=0.18.0" },
     { name = "torchy-core", editable = "../common" },
     { name = "trackio", specifier = ">=0.39.0" },
-    { name = "trl", extras = ["vllm"], git = "https://github.com/huggingface/trl" },
+    { name = "trl", extras = ["vllm"], git = "https://github.com/carlesoctav/trl" },
     { name = "vllm" },
 ]
 
