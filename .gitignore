@@ -27,9 +27,8 @@ unsloth_compiled_cache/
 decisions.tsv
 
 # Logs, local outputs, & heavy model artifacts
-logs/
-outputs/
-data/
+# outputs/
+# data/
 raw/
 temp/
 wandb/
