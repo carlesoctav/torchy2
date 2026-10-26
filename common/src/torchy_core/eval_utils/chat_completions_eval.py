@@ -14,6 +14,7 @@ from typing import Any
 
 import aiohttp
 from datasets import Dataset
+from torch.utils._pytree import tree_map
 from transformers.utils.chat_template_utils import get_json_schema
 
 logger = logging.getLogger(__name__)
@@ -40,13 +41,17 @@ class AsyncChatCompletions:
         request_timeout: int = 120,
         reasoning_effort: str | None = None,
         extra_payload: dict[str, Any] | None = None,
+        override: bool = False,
     ) -> None:
-
-
         self.output_dir = Path(output_dir)
+        is_not_empty = self.output_dir.exists() and any(self.output_dir.iterdir())
+
+        if is_not_empty and not override:
+            raise ValueError(f" {self.output_dir} must be an empty dir since override is {override}")
+
         self.jsonl_path = self.output_dir / "rollouts.jsonl"
-        self.error_jsonl_path = self.output_dir / "error.jsonl"
-        self.parquet_path = self.output_dir / "rollouts.parquet"
+        self.error_jsonl_path = self.output_dir / "errors.jsonl"
+        self.reward_path = self.output_dir / "rewards.json"
         self.endpoints = endpoints
         self.model_name = model_name
         self.headers = headers if headers is not None else {}
@@ -143,21 +148,28 @@ class AsyncChatCompletions:
         )
         self._total_rollouts = 0
         self._failed_rollouts = 0
-        self._rewards: list[float] = []
+        self._rewards: list[dict[str, float]] = []
         self._total_prompt_tokens = 0
         self._total_completion_tokens = 0
         self._total_cached_tokens = 0
         self.session: aiohttp.ClientSession | None = None
 
     def _drain_rollout(self) -> None:
-        with open(self.jsonl_path, "a", encoding="utf-8") as f:
+        with open(self.jsonl_path, "a", encoding="utf-8") as f, open(self.reward_path, "a", encoding="utf-8") as f2:
             while True:
                 item = self._rollout_queue.get()
                 if item is None:
                     self._rollout_queue.task_done()
                     break
+                rewards = {
+                    "id": item["id"],
+                    "group_id": item["group_id"],
+                    "reward": item["reward"],
+                }
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                f2.write(json.dumps(rewards, ensure_ascii=False) + "\n")
                 f.flush()
+                f2.flush()
                 self._rollout_queue.task_done()
 
     def _drain_error(self) -> None:
@@ -273,29 +285,27 @@ class AsyncChatCompletions:
         environment: Any | None,
         prompt: list[dict[str, Any]],
         completion: list[dict[str, Any]],
-    ) -> float:
+    ) -> dict[str, Any]:
         loop = asyncio.get_running_loop()
+        rewards = {}
         if environment is not None and type(environment) in self._env_reward_types:
             get_reward = environment.get_reward
             if inspect.iscoroutinefunction(get_reward):
-                reward = await get_reward()
+                r = await get_reward()
             else:
-                reward = await loop.run_in_executor(self._tool_pool, get_reward)
-            return float(reward)
-
-        total_reward = 0.0
+                r = await loop.run_in_executor(self._tool_pool, get_reward)
+            rewards[environment.__class__.__name__] = r
         for rf in self.reward_funcs:
             if inspect.iscoroutinefunction(rf):
                 r = await rf(prompts=[prompt], completions=[completion])
+                rewards[rf.__name__] = r
             else:
                 r = await loop.run_in_executor(
                     self._tool_pool,
                     functools.partial(rf, prompts=[prompt], completions=[completion]),
                 )
-            if isinstance(r, (list, tuple)):
-                r = r[0]
-            total_reward += float(r)
-        return total_reward
+                rewards[rf.__name__] = r
+        return rewards
 
     async def _generate_one(
         self,
@@ -368,7 +378,7 @@ class AsyncChatCompletions:
             )
             logger.info(
                 f"[Rollout {rollout_id} | Group {group_id}] "
-                f"Reward: {reward:.4f} | Tool Turns: {iteration} | Messages: {len(completion)} | "
+                f"Reward: {reward} | Tool Turns: {iteration} | Messages: {len(completion)} | "
                 f"Tokens: {rollout_prompt_tokens} in ({cache_rate:.1f}% cached), {rollout_completion_tokens} out"
             )
         except Exception as e:
@@ -474,6 +484,8 @@ class AsyncChatCompletions:
             self.jsonl_path.unlink()
         if self.error_jsonl_path.exists():
             self.error_jsonl_path.unlink()
+        if self.reward_path.exists():
+            self.reward_path.unlink()
 
         if self.total_rollouts == 0:
             self.jsonl_path.touch()
@@ -494,13 +506,17 @@ class AsyncChatCompletions:
             self._error_drain_thread.join()
             self._tool_pool.shutdown(wait=True)
 
-        mean_reward = sum(self._rewards) / len(self._rewards) if self._rewards else 0.0
+        def _f(*leaf):
+            return sum(leaf) / len(leaf)
+
+        mean_reward = tree_map(_f, *self._rewards)
         total_p = self._total_prompt_tokens
         total_c = self._total_completion_tokens
         total_cached = self._total_cached_tokens
         overall_cache_rate = (total_cached / total_p * 100) if total_p > 0 else 0.0
         logger.info(
-            f"Saved {len(self._rewards)} rollouts to {self.jsonl_path} (mean_reward={mean_reward:.4f}, failed={self._failed_rollouts}) | "
+            f"Saved {len(self._rewards)} rollouts to {self.jsonl_path}, failed={self._failed_rollouts}) | "
+            f"mean rewards {mean_reward} | "
             f"Prompt Tokens: {total_p} ({overall_cache_rate:.1f}% cached) | Completion Tokens: {total_c}"
         )
         if self._failed_rollouts > 0:
