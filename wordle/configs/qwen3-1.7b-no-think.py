@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-import json
-
 import sws
-from torchao.core.config import config_to_dict
-from torchao.quantization import (
-    Float8DynamicActivationFloat8WeightConfig,
-    PerRow,
-)
 
 
 def get_config() -> sws.Config:
@@ -33,11 +26,11 @@ def get_config() -> sws.Config:
 
     config.inference.infra.session = "vllm"
     config.inference.infra.gpu = "l4"
-    config.inference.infra.volumes = lambda : [f"{config.bucket}:/content/lora", f"{config.aot_bucket}:/content/vllm-aot"]
+    config.inference.infra.volumes = lambda : [f"{config.bucket}:/content/lora"]
     config.inference.infra.local_forwards = ["8000:localhost:8000"]
     config.inference.infra.stop_vm = False
 
-    config.inference.vllm.model = "Qwen/Qwen3-1.7B"
+    config.inference.vllm.model = "/content/lora/wordle-sft/qwen-wordle-dft/checkpoint-40"
     config.inference.vllm.host = "0.0.0.0"
     config.inference.vllm.port = 8000
     config.inference.vllm.max_model_len = 2048
