@@ -65,6 +65,7 @@ class ThinkingBudgetRolloutLoop(_AsyncRolloutLoop):
         result = await super()._generate_one(prompt, tool_dict=tool_dict, tools=tools, group_id=group_id)
         if self.mask_force_think:
             completion, completion_ids, sequences, tool_call_count, tool_failure_count, rollout_reward = result
+            #work for ersonign-parser like qwen or deepseek
             think_end_ids = set(self.tokenizer.encode("</think>", add_special_tokens=False))
             for seq in sequences:
                 for i, (tok_id, lp) in enumerate(zip(seq.input_ids, seq.old_log_probs)):

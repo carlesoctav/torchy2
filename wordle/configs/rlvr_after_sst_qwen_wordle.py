@@ -105,9 +105,8 @@ def get_config() -> sws.Config:
     config.train.grpo.num_completions_to_print = 1 
     config.train.grpo.chat_template_kwargs = {"enable_thinking": True}
 
-
-    config.train.grpo.temperature = 0.7
-    config.train.grpo.top_p = 0.8
+    config.train.grpo.temperature = 0.6
+    config.train.grpo.top_p = 0.95
     config.train.grpo.top_k = 20
 
     config.env.name = "wordle"
